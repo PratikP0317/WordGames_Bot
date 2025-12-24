@@ -1,0 +1,19 @@
+From the screenshot, extract the 4×4 Word Hunt letter grid.
+
+Return ONLY valid JSON (no markdown/explanations/extra text). Use lowercase.
+Read row-major: left→right, top→bottom.
+
+Output format (exact):
+{
+"grid": [
+["a","b","c","d"],
+["e","f","g","h"],
+["i","j","k","l"],
+["m","n","o","p"]
+]
+}
+
+Rules:
+- If a tile shows "Qu", return "q".
+- Ignore scores/timers/highlights/UI.
+- If unclear, make the best visual guess.
