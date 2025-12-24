@@ -16,17 +16,9 @@ def Ollama_Test():
     )
     print(ollama_response['message']['content'])
 
-def prepare_for_llm(src_path: str, dst_path: str, max_side=100):
-    img = Image.open(src_path).convert("RGB")
-    w, h = img.size
-    scale = min(max_side / w, max_side / h, 1.0)
-    if scale < 1.0:
-        img = img.resize((int(w * scale), int(h * scale)))
-    img.save(dst_path, optimize=True)
 
 def image_to_board(image_path: str) -> list[list[str]]: 
     model_name = "qwen3-vl:4b"
-    model_name = "llama3.2-vision:11b"
     # Read from this current dir path @ propmpt.txt
     prompt_path = Path(__file__).with_name("prompt.txt")
     with open(prompt_path, "r") as f:
@@ -110,14 +102,10 @@ class Word_Hunt_Bot:
             return  self.found_words.copy()
         
 if __name__ == "__main__":
-
-    # Test Example
-    board = [
-        ["t", "e", "s", "t"],
-        ["a", "b", "s", "d"],
-        ["e", "i", "c", "h"],
-        ["f", "j", "k", "l"],
-    ]
+    import time
+    start_time = time.time()
+    image_path = str(Path(__file__).with_name("board.png"))
+    board = image_to_board(image_path=image_path)
 
     print("Board:")
     for row in board:
@@ -147,13 +135,6 @@ if __name__ == "__main__":
         print(f"{w} -> {path}")
     print(len(paths))
 
-    import time
-    start_time = time.time()
-    image_path = str(Path(__file__).with_name("board.png"))
-    # made dest path different
-    dest_path = str(Path(__file__).with_name("board_opt.png"))
-    prepare_for_llm(image_path, dest_path)
-    image_to_board(dest_path)
     end_time = time.time()
     print(f"Image to board extraction took {end_time - start_time:.2f} seconds.")
 
