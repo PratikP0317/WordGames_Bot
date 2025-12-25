@@ -114,10 +114,11 @@ class Word_Hunt_Bot:
                 0 <= y < self.board_size and \
                 (x, y) not in visited
     def get_found_words(self, sorted_max_len= True) -> list[tuple[str, list[tuple[int, int]]]]:
+        words = self.found_words.copy()
         if sorted_max_len:
-            return sorted(self.found_words, key=lambda item: (-len(item[0]), item[0]))
+            return sorted(words, key=lambda item: (-len(item[0]), item[0]))
         else:
-            return  self.found_words.copy()
+            return  words
         
 if __name__ == "__main__":
 
