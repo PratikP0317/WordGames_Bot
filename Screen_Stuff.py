@@ -10,46 +10,86 @@ permission for screenshots to work.
 
 from __future__ import annotations
 
+import json
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
+from PIL import ImageGrab 
+import pyautogui
 
-def screenshot_box_from_origin(
-	x: int,
-	y: int,
-	size: int = 230,
+Point = tuple[int, int]
+
+
+@dataclass(slots=True)
+class CalibrationConfig:
+	"""Holds screen calibration for a Word Hunt-style grid."""
+
+	grid_size: int = 4
+	top_left: Point | None = None
+	bottom_right: Point | None = None
+	grid: list[list[Point]] = field(default_factory=list)
+
+	def is_complete(self) -> bool:
+		if self.top_left is None or self.bottom_right is None:
+			return False
+		if len(self.grid) != self.grid_size:
+			return False
+		return all(len(row) == self.grid_size for row in self.grid)
+
+	def to_dict(self) -> dict:
+		return {
+			"grid_size": self.grid_size,
+			"top_left": list(self.top_left) if self.top_left is not None else None,
+			"bottom_right": list(self.bottom_right) if self.bottom_right is not None else None,
+			"grid": [[list(p) for p in row] for row in self.grid],
+		}
+
+	@staticmethod
+	def from_dict(data: dict) -> "CalibrationConfig":
+		grid_size = int(data.get("grid_size", 4))
+		tl = data.get("top_left")
+		br = data.get("bottom_right")
+		grid_raw = data.get("grid", [])
+		grid: list[list[Point]] = []
+		for row in grid_raw:
+			grid.append([(int(p[0]), int(p[1])) for p in row])
+		return CalibrationConfig(
+			grid_size=grid_size,
+			top_left=(int(tl[0]), int(tl[1])) if tl is not None else None,
+			bottom_right=(int(br[0]), int(br[1])) if br is not None else None,
+			grid=grid,
+		)
+
+	def save_json(self, path: str | Path) -> None:
+		path = Path(path)
+		path.parent.mkdir(parents=True, exist_ok=True)
+		path.write_text(json.dumps(self.to_dict(), indent=2), encoding="utf-8")
+
+	@staticmethod
+	def load_json(path: str | Path) -> "CalibrationConfig":
+		path = Path(path)
+		data = json.loads(path.read_text(encoding="utf-8"))
+		return CalibrationConfig.from_dict(data)
+
+def calibrate_via_keypress(
+	grid_size: int = 4,
+	key_char: str = "c",
 	save_path: str | Path | None = None,
-):
-	"""Take a screenshot of a size×size box starting at (x, y) going right+down.
+) -> CalibrationConfig:
+	"""Interactively capture board calibration using a global keypress.
 
-	Returns a PIL Image. If save_path is provided, saves the image.
+	Flow:
+	- Hover top-left of the board, press `key_char`
+	- Hover bottom-right of the board, press `key_char`
+	- Hover each grid cell target in row-major order and press `key_char`
+	  (00, 01, 02, 03, 10, 11, ...)
+
+	Press ESC to cancel.
 	"""
 
-	try:
-		from PIL import ImageGrab  # type: ignore
-	except ModuleNotFoundError as e:
-		raise ModuleNotFoundError(
-			"Missing dependency 'pillow'. Install with: uv add pillow"
-		) from e
-
-	bbox = (int(x), int(y), int(x) + int(size), int(y) + int(size))
-	img = ImageGrab.grab(bbox=bbox)
-
-	if save_path is not None:
-		save_path = Path(save_path)
-		save_path.parent.mkdir(parents=True, exist_ok=True)
-		img.save(save_path)
-
-	return img
-
-
-def listen_and_print_cursor_on_f(
-	on_position: Callable[[int, int], None] | None = None,
-) -> None:
-	"""Block and listen globally; on pressing 'f' prints mouse (x, y).
-
-	Press ESC to quit.
-	"""
+	if len(key_char) != 1:
+		raise ValueError("key_char must be a single character")
 
 	try:
 		from pynput import keyboard, mouse  # type: ignore
@@ -58,41 +98,164 @@ def listen_and_print_cursor_on_f(
 			"Missing dependency 'pynput'. Install with: uv add pynput"
 		) from e
 
-	if on_position is None:
-		on_position = lambda x, y: print(f"x={x}, y={y}")
-
 	m = mouse.Controller()
+	config = CalibrationConfig(grid_size=int(grid_size))
+	grid_points: list[list[Point | None]] = [
+		[None for _ in range(config.grid_size)] for _ in range(config.grid_size)
+	]
+	step = 0  # 0=top_left, 1=bottom_right, 2=grid
+	grid_index = 0
+	total_grid = config.grid_size * config.grid_size
+	cancelled = False
 
-	def _on_press(key):
-		try:
-			# Character keys
-			if key.char == "f":
-				x, y = m.position
-				on_position(int(x), int(y))
-		except AttributeError:
-			# Special keys
-			if key == keyboard.Key.esc:
-				return False
+	def _next_prompt() -> str:
+		if step == 0:
+			return f"Next: hover TOP-LEFT and press '{key_char}'"
+		if step == 1:
+			return f"Next: hover BOTTOM-RIGHT and press '{key_char}'"
+		row = grid_index // config.grid_size
+		col = grid_index % config.grid_size
+		return f"Next: hover grid[{row}][{col}] and press '{key_char}'"
 
-		return None
+	def _capture_position() -> Point:
+		x, y = m.position
+		return (int(x), int(y))
 
-	print("Listening for key 'f'... (press ESC to quit)")
-	with keyboard.Listener(on_press=_on_press) as listener:
-		listener.join()
+	listener: "keyboard.Listener | None" = None
+
+	def _on_press(key) -> None:
+		nonlocal step, grid_index, cancelled
+
+		# Character keys
+		if getattr(key, "char", None) in {key_char.lower(), key_char.upper()}:
+			pos = _capture_position()
+			if step == 0:
+				config.top_left = pos
+				step = 1
+				print(f"Captured top_left: {pos}")
+				print(_next_prompt())
+				return
+			if step == 1:
+				config.bottom_right = pos
+				step = 2
+				print(f"Captured bottom_right: {pos}")
+				print(_next_prompt())
+				return
+
+			row = grid_index // config.grid_size
+			col = grid_index % config.grid_size
+			grid_points[row][col] = pos
+			print(f"Captured grid[{row}][{col}]: {pos}")
+			grid_index += 1
+			if grid_index >= total_grid and listener is not None:
+				listener.stop()
+				return
+			print(_next_prompt())
+			return
+
+		# Special keys
+		if key == keyboard.Key.esc:
+			cancelled = True
+			if listener is not None:
+				listener.stop()
+
+	print("Calibration started. Press ESC to cancel.")
+	print(_next_prompt())
+	listener = keyboard.Listener(on_press=_on_press)
+	listener.start()
+	listener.join()
+
+	if cancelled:
+		raise RuntimeError("Calibration cancelled")
+	if config.top_left is None or config.bottom_right is None:
+		raise RuntimeError("Calibration incomplete: missing bounding box")
+
+	grid_final: list[list[Point]] = []
+	for r in range(config.grid_size):
+		row_final: list[Point] = []
+		for c in range(config.grid_size):
+			p = grid_points[r][c]
+			if p is None:
+				raise RuntimeError("Calibration incomplete: missing grid points")
+			row_final.append(p)
+		grid_final.append(row_final)
+	config.grid = grid_final
+
+	if save_path is not None:
+		config.save_json(save_path)
+		print(f"Saved calibration: {Path(save_path)}")
+
+	return config
+
+
+def do_calibraitonn() -> None:
+	out = Path("./calibration.json")
+	config = calibrate_via_keypress(grid_size=4, key_char="c", save_path=out)
+	print("Calibration complete.")
+	print(f"top_left={config.top_left} bottom_right={config.bottom_right}")
+
+def take_screenshot(config : CalibrationConfig, with_timer=True) -> None:
+	"""Take a screenshot of the calibrated board area."""	
+	if config.top_left is None or config.bottom_right is None:
+		raise ValueError("CalibrationConfig is incomplete")
+	
+	box = (
+		config.top_left[0],
+		config.top_left[1],
+		config.bottom_right[0],
+		config.bottom_right[1],
+	)
+	if with_timer:
+		from time import sleep
+		print("Taking screenshot in 5 seconds. Prepare the screen.")
+		sleep(1)
+		print("4...")
+		sleep(1)
+		print("3...")
+		sleep(1)
+		print("2...")
+		sleep(1)
+		print("1...")
+		sleep(1)
+		print("Capturing screenshot now.")
+		sleep(0.5)
+
+	screenshot = ImageGrab.grab(bbox=box)
+	screenshot.show()
+	screenshot.save("curr_board.png")
+	print("Screenshot saved as curr_board.png")
+
+
+
+import time
+from pynput.mouse import Controller, Button
+
+mouse = Controller()
+
+def trace_word_path(path, config):
+  if not path:
+    return
+
+  r0, c0 = path[0]
+  x0, y0 = config.grid[r0][c0]
+
+  mouse.position = (x0, y0)
+  time.sleep(.2)
+  mouse.press(Button.left)
+
+  for r, c in path[1:]:
+    x, y = config.grid[r][c]
+    mouse.position = (x, y)
+    time.sleep(.08)
+
+  mouse.release(Button.left)
+
+
 
 
 if __name__ == "__main__":
-	# Demo: press 'f' to print coords; press ESC to quit.
-	# Optional: set TAKE_SHOT=1 to also save a 230x230 screenshot at each press.
-	import os
-
-	take_shot = os.environ.get("TAKE_SHOT") == "1"
-
-	def handler(x: int, y: int) -> None:
-		print(f"x={x}, y={y}")
-		if take_shot:
-			out = Path("./screenshots") / f"shot_{x}_{y}.png"
-			screenshot_box_from_origin(x, y, size=230, save_path=out)
-			print(f"saved: {out}")
-
-	listen_and_print_cursor_on_f(on_position=handler)
+	from time import sleep
+	sleep(4)
+	fake_path = [(0,0), (0,1), (0,2), (1,2), (2,2)]
+	config = CalibrationConfig.load_json("./calibration.json")
+	trace_word_path(fake_path, config)

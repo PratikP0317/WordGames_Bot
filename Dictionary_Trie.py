@@ -8,7 +8,6 @@ class DictionaryTrie:
     - Fixed-size child arrays (26) per node for quick transitions
     - Optional full word stored at terminal nodes to avoid rebuilding strings
     """
-
     class _Node:
         """Internal trie node."""
 

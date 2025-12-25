@@ -5,6 +5,8 @@ from pathlib import Path
 from ollama import chat
 from PIL import Image
 
+from Screen_Stuff import take_screenshot, CalibrationConfig
+
 def Ollama_Test():
     model_name = "qwen3-vl:8b"
     ollama_response = chat(
@@ -17,7 +19,7 @@ def Ollama_Test():
     print(ollama_response['message']['content'])
 
 
-def image_to_board(image_path: str) -> list[list[str]]: 
+def llm_image_to_board(image_path: str) -> list[list[str]]: 
     model_name = "qwen3-vl:4b"
     # Read from this current dir path @ propmpt.txt
     prompt_path = Path(__file__).with_name("prompt.txt")
@@ -51,6 +53,22 @@ def image_to_board(image_path: str) -> list[list[str]]:
     board_json = json.loads(board_str)
     board = board_json["grid"]  
     print("Extracted Board from Image:")
+    for row in board:
+        print(" ".join(row))    
+    return board
+
+
+def manuel_board_input() -> list[list[str]]:
+    print("Please input single string of 16 letters (row-wise) for the 4x4 board (e.g., abcd efgh ijkl mnop):")
+    # just remove spaces when read in
+    board_input = input().strip().replace(" ", "").lower()
+    if len(board_input) != 16 or not board_input.isalpha():
+        raise ValueError("Invalid board input. Please enter exactly 16 letters.")
+    board = []
+    for i in range(4):
+        row = list(board_input[i*4:(i+1)*4])
+        board.append(row)
+    print("Manually Inputted Board:")
     for row in board:
         print(" ".join(row))    
     return board
@@ -102,41 +120,12 @@ class Word_Hunt_Bot:
             return  self.found_words.copy()
         
 if __name__ == "__main__":
+
+
     import time
     start_time = time.time()
-    image_path = str(Path(__file__).with_name("board.png"))
-    board = image_to_board(image_path=image_path)
-
-    print("Board:")
-    for row in board:
-        print(" ".join(row))
-
-    bot = Word_Hunt_Bot(board)
-    bot.solve()
-
-    # Sort by word length desc, then word asc.
-    words_path_pairs = sorted({w for w, _ in bot.found_words}, key=lambda w: (-len(w), w))
-    paths = []
-    words = []
-    for w, path in bot.get_found_words(sorted_max_len=True):
-        paths.append((w, path))
-        words.append(w)
-    unique_words = sorted(set(words), key=lambda w: (-len(w), w))
-
-    print(f"\nFound {len(paths)} word paths")
-    print(f"Unique words: {len(unique_words)}")
-
-    print("Top 25 unique words (longest first):")
-    for w in unique_words[:25]:
-        print(w)
-
-    print("\nTop 10 paths (word -> coordinates):")
-    for w, path in paths[:10]:
-        print(f"{w} -> {path}")
-    print(len(paths))
-
-    end_time = time.time()
-    print(f"Image to board extraction took {end_time - start_time:.2f} seconds.")
+    image_path = str(Path(__file__).with_name("curr_board.png"))
+    board = manuel_board_input()
 
 
     
