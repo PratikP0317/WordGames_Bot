@@ -8,6 +8,7 @@ class DictionaryTrie:
     - Fixed-size child arrays (26) per node for quick transitions
     - Optional full word stored at terminal nodes to avoid rebuilding strings
     """
+
     class _Node:
         """Internal trie node."""
 
@@ -115,10 +116,9 @@ class DictionaryTrie:
 
 def main() -> None:
     """Small demonstration of building and querying the trie."""
-    from pathlib import Path
+    from .paths import DEFAULT_DICTIONARY_PATH
 
-    # Prefer loading the real word list if it's available next to this file.
-    word_list = Path(__file__).with_name("enable1.txt")
+    word_list = DEFAULT_DICTIONARY_PATH
     if word_list.exists():
         trie = DictionaryTrie(str(word_list))
         print(f"Loaded trie from {word_list.name}")
