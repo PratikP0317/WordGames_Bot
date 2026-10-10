@@ -7,6 +7,8 @@ from .solver import WordHuntBot, manual_board_input
 
 def main() -> None:
     config = CalibrationConfig.load_json(DEFAULT_CALIBRATION_PATH)
+    if not config.is_complete() or config.grid_size != 4:
+        raise ValueError("Run calibration first to save a complete 4x4 grid.")
     board = manual_board_input()
 
     # countdown timer

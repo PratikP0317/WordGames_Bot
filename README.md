@@ -57,6 +57,7 @@ For each tile, the solver walks horizontally, vertically, and diagonally through
 
 | File | Responsibility |
 | --- | --- |
+| [`main.py`](main.py) | Opens the terminal menu for running the bot or calibrating. |
 | [`main.py`](src/wordgames_bot/main.py) | Coordinates board input, solving, timing, sorting, and playback. |
 | [`solver.py`](src/wordgames_bot/solver.py) | Implements board parsing, DFS search, and the optional Ollama vision experiment. |
 | [`trie.py`](src/wordgames_bot/trie.py) | Loads the dictionary into a compact prefix trie for word and prefix lookup. |
@@ -83,9 +84,10 @@ The shortest path is:
 
 ```bash
 uv sync
-uv run word-hunt-calibrate
-uv run word-hunt-bot
+uv run main.py
 ```
+
+Choose **Calibrate board** on your first run, then **Run bot**. Calibration only needs the centers of the top-left and bottom-right cells; the remaining cell centers are calculated automatically for an evenly spaced grid. The menu returns after each action. You can also open it with `uv run python -m wordgames_bot`.
 
 Calibration is machine- and window-position-specific. On macOS, the terminal or IDE running the bot also needs Accessibility permission for mouse control; screenshot capture additionally needs Screen Recording permission.
 

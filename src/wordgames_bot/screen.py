@@ -15,9 +15,6 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from PIL import ImageGrab
-from pynput.mouse import Button, Controller
-
 from .paths import DEFAULT_CALIBRATION_PATH, DEFAULT_CAPTURE_PATH
 
 Point = tuple[int, int]
@@ -31,6 +28,26 @@ class CalibrationConfig:
     top_left: Point | None = None
     bottom_right: Point | None = None
     grid: list[list[Point]] = field(default_factory=list)
+
+    @staticmethod
+    def from_centers(
+        top_left: Point, bottom_right: Point, grid_size: int = 4
+    ) -> CalibrationConfig:
+        """Interpolate an evenly spaced grid from its opposite cell centers."""
+        if grid_size < 2:
+            raise ValueError("grid_size must be at least 2")
+        if bottom_right[0] <= top_left[0] or bottom_right[1] <= top_left[1]:
+            raise ValueError("Bottom-right center must be below and right of top-left.")
+        dx = (bottom_right[0] - top_left[0]) / (grid_size - 1)
+        dy = (bottom_right[1] - top_left[1]) / (grid_size - 1)
+        grid = [
+            [
+                (round(top_left[0] + col * dx), round(top_left[1] + row * dy))
+                for col in range(grid_size)
+            ]
+            for row in range(grid_size)
+        ]
+        return CalibrationConfig(grid_size, top_left, bottom_right, grid)
 
     def is_complete(self) -> bool:
         if self.top_left is None or self.bottom_right is None:
@@ -85,16 +102,17 @@ def calibrate_via_keypress(
     """Interactively capture board calibration using a global keypress.
 
     Flow:
-    - Hover top-left of the board, press `key_char`
-    - Hover bottom-right of the board, press `key_char`
-    - Hover each grid cell target in row-major order and press `key_char`
-      (00, 01, 02, 03, 10, 11, ...)
+    - Hover the CENTER of the top-left cell, press and release `key_char`
+    - Hover the CENTER of the bottom-right cell, press and release `key_char`
+    - Calculate every other cell center automatically
 
     Press ESC to cancel.
     """
 
     if len(key_char) != 1:
         raise ValueError("key_char must be a single character")
+    if grid_size < 2:
+        raise ValueError("grid_size must be at least 2")
 
     try:
         from pynput import keyboard, mouse  # type: ignore
@@ -104,87 +122,53 @@ def calibrate_via_keypress(
         ) from e
 
     m = mouse.Controller()
-    config = CalibrationConfig(grid_size=int(grid_size))
-    grid_points: list[list[Point | None]] = [
-        [None for _ in range(config.grid_size)] for _ in range(config.grid_size)
-    ]
-    step = 0  # 0=top_left, 1=bottom_right, 2=grid
-    grid_index = 0
-    total_grid = config.grid_size * config.grid_size
+    config: CalibrationConfig | None = None
+    top_left: Point | None = None
     cancelled = False
 
     def _next_prompt() -> str:
-        if step == 0:
-            return f"Next: hover TOP-LEFT and press '{key_char}'"
-        if step == 1:
-            return f"Next: hover BOTTOM-RIGHT and press '{key_char}'"
-        row = grid_index // config.grid_size
-        col = grid_index % config.grid_size
-        return f"Next: hover grid[{row}][{col}] and press '{key_char}'"
+        cell = "TOP-LEFT" if top_left is None else "BOTTOM-RIGHT"
+        return f"Next: hover the CENTER of the {cell} cell and press '{key_char}'"
 
     def _capture_position() -> Point:
         x, y = m.position
         return (int(x), int(y))
 
-    listener: keyboard.Listener | None = None
-
-    def _on_press(key) -> None:
-        nonlocal step, grid_index, cancelled
+    def _on_release(key):
+        nonlocal config, top_left, cancelled
 
         # Character keys
         if getattr(key, "char", None) in {key_char.lower(), key_char.upper()}:
             pos = _capture_position()
-            if step == 0:
-                config.top_left = pos
-                step = 1
-                print(f"Captured top_left: {pos}")
+            if top_left is None:
+                top_left = pos
+                print(f"Captured top-left cell center: {pos}")
                 print(_next_prompt())
                 return
-            if step == 1:
-                config.bottom_right = pos
-                step = 2
-                print(f"Captured bottom_right: {pos}")
+            try:
+                config = CalibrationConfig.from_centers(top_left, pos, grid_size)
+            except ValueError as error:
+                print(error)
                 print(_next_prompt())
                 return
-
-            row = grid_index // config.grid_size
-            col = grid_index % config.grid_size
-            grid_points[row][col] = pos
-            print(f"Captured grid[{row}][{col}]: {pos}")
-            grid_index += 1
-            if grid_index >= total_grid and listener is not None:
-                listener.stop()
-                return
-            print(_next_prompt())
-            return
+            print(f"Captured bottom-right cell center: {pos}")
+            print(f"Calculated all {grid_size * grid_size} cell centers.")
+            return False
 
         # Special keys
         if key == keyboard.Key.esc:
             cancelled = True
-            if listener is not None:
-                listener.stop()
+            return False
 
     print("Calibration started. Press ESC to cancel.")
     print(_next_prompt())
-    listener = keyboard.Listener(on_press=_on_press)
-    listener.start()
-    listener.join()
+    with keyboard.Listener(on_release=_on_release) as listener:
+        listener.join()
 
     if cancelled:
         raise RuntimeError("Calibration cancelled")
-    if config.top_left is None or config.bottom_right is None:
-        raise RuntimeError("Calibration incomplete: missing bounding box")
-
-    grid_final: list[list[Point]] = []
-    for r in range(config.grid_size):
-        row_final: list[Point] = []
-        for c in range(config.grid_size):
-            p = grid_points[r][c]
-            if p is None:
-                raise RuntimeError("Calibration incomplete: missing grid points")
-            row_final.append(p)
-        grid_final.append(row_final)
-    config.grid = grid_final
+    if config is None:
+        raise RuntimeError("Calibration incomplete: missing cell centers")
 
     if save_path is not None:
         config.save_json(save_path)
@@ -209,14 +193,21 @@ def take_screenshot(
     output_path: str | Path = DEFAULT_CAPTURE_PATH,
 ) -> None:
     """Take a screenshot of the calibrated board area."""
-    if config.top_left is None or config.bottom_right is None:
+    from PIL import ImageGrab
+
+    if not config.is_complete() or config.grid_size < 2:
         raise ValueError("CalibrationConfig is incomplete")
 
+    # Extend half a cell beyond the centers to capture the whole board.
+    top_left = config.grid[0][0]
+    bottom_right = config.grid[-1][-1]
+    half_width = (bottom_right[0] - top_left[0]) / (2 * (config.grid_size - 1))
+    half_height = (bottom_right[1] - top_left[1]) / (2 * (config.grid_size - 1))
     box = (
-        config.top_left[0],
-        config.top_left[1],
-        config.bottom_right[0],
-        config.bottom_right[1],
+        round(top_left[0] - half_width),
+        round(top_left[1] - half_height),
+        round(bottom_right[0] + half_width),
+        round(bottom_right[1] + half_height),
     )
     if with_timer:
         from time import sleep
@@ -242,12 +233,13 @@ def take_screenshot(
     print(f"Screenshot saved as {output_path}")
 
 
-mouse = Controller()
-
-
 def trace_word_path(path, config):
     if not path:
         return
+
+    from pynput.mouse import Button, Controller
+
+    mouse = Controller()
 
     r0, c0 = path[0]
     x0, y0 = config.grid[r0][c0]
@@ -256,9 +248,10 @@ def trace_word_path(path, config):
     time.sleep(0.2)
     mouse.press(Button.left)
 
-    for r, c in path[1:]:
-        x, y = config.grid[r][c]
-        mouse.position = (x, y)
-        time.sleep(0.08)
-
-    mouse.release(Button.left)
+    try:
+        for r, c in path[1:]:
+            x, y = config.grid[r][c]
+            mouse.position = (x, y)
+            time.sleep(0.08)
+    finally:
+        mouse.release(Button.left)

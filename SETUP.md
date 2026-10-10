@@ -22,28 +22,29 @@ uv sync
 
 ## Calibrate the board
 
-Open the game board and keep it in the position and size you intend to use. Then run:
+Open the game board and keep it in the position and size you intend to use. Start the menu:
 
 ```bash
-uv run word-hunt-calibrate
+uv run main.py
 ```
 
-Follow the terminal prompts:
+Choose **2. Calibrate board**, then follow the terminal prompts:
 
-1. Hover over the board's top-left corner and press `c`.
-2. Hover over the board's bottom-right corner and press `c`.
-3. Hover over the center of every tile in row-major order and press `c` for each one: `00`, `01`, `02`, `03`, `10`, and so on.
-4. Press `Esc` at any point to cancel.
+1. Hover over the **center of the top-left tile** and press and release `c`.
+2. Hover over the **center of the bottom-right tile** and press and release `c`.
+3. Press `Esc` at any point to cancel and return to the menu.
 
-The command writes the captured bounding box and 16 tile coordinates to `config/calibration.json`.
+The bot calculates all 16 tile centers by evenly spacing them between the two captured centers, then saves them to `config/calibration.json`. This assumes an axis-aligned, evenly spaced board. Existing calibration files still work. The direct `uv run word-hunt-calibrate` command is also available.
 
 > Recalibrate whenever the game window, display scaling, board position, or board size changes.
 
 ## Run the bot
 
 ```bash
-uv run word-hunt-bot
+uv run main.py
 ```
+
+Choose **1. Run bot**. The direct `uv run word-hunt-bot` command is also available.
 
 When prompted, enter exactly 16 letters in row-major order. Spaces are optional, so both examples below are accepted:
 
@@ -59,7 +60,7 @@ After a three-second countdown, the bot solves the board, prints each selected w
 
 ## Optional screenshot and local vision workflow
 
-The repository includes the building blocks for image-based board entry, but this path is commented out in `src/wordgames_bot/main.py`.
+The repository includes the building blocks for image-based board entry, but this path is not enabled in `src/wordgames_bot/main.py`.
 
 1. Install and start Ollama.
 2. Pull the model configured in `src/wordgames_bot/solver.py`:
@@ -86,7 +87,7 @@ Enable **Screen Recording** for the same application, then restart it before try
 
 ### Swipes miss the tiles
 
-Run `uv run word-hunt-calibrate` again without moving or resizing the board afterward. Capture each tile near its center.
+Choose **Calibrate board** again without moving or resizing the board afterward. Capture the centers of the top-left and bottom-right tiles.
 
 ### A board is rejected
 
