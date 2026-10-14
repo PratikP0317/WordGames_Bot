@@ -11,9 +11,9 @@ permission for screenshots to work.
 from __future__ import annotations
 
 import json
-import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from threading import Event
 
 from .paths import DEFAULT_CALIBRATION_PATH, DEFAULT_CAPTURE_PATH
 
@@ -233,8 +233,12 @@ def take_screenshot(
     print(f"Screenshot saved as {output_path}")
 
 
-def trace_word_path(path, config):
-    if not path:
+def trace_word_path(
+    path, config, stop_event: Event | None = None,
+    *, start_delay: float = 0.2, step_delay: float = 0.08,
+):
+    stop_event = stop_event if stop_event is not None else Event()
+    if not path or stop_event.is_set():
         return
 
     from pynput.mouse import Button, Controller
@@ -245,13 +249,17 @@ def trace_word_path(path, config):
     x0, y0 = config.grid[r0][c0]
 
     mouse.position = (x0, y0)
-    time.sleep(0.2)
+    if stop_event.wait(start_delay):
+        return
     mouse.press(Button.left)
 
     try:
         for r, c in path[1:]:
+            if stop_event.is_set():
+                break
             x, y = config.grid[r][c]
             mouse.position = (x, y)
-            time.sleep(0.08)
+            if stop_event.wait(step_delay):
+                break
     finally:
         mouse.release(Button.left)

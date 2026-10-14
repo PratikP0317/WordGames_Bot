@@ -46,6 +46,8 @@ uv run main.py
 
 Choose **1. Run bot**. The direct `uv run word-hunt-bot` command is also available.
 
+Choose a playback speed (**Slow**, **Normal**, or **Fast**) and word order (**Highest first / longest**, **Lowest first / shortest**, or **Random**). Enter accepts normal speed and longest words first. Speed changes the pause before a swipe, between tiles, and between words.
+
 When prompted, enter exactly 16 letters in row-major order. Spaces are optional, so both examples below are accepted:
 
 ```text
@@ -56,7 +58,7 @@ tooucrrhnelnadal
 toou crrh neln adal
 ```
 
-After a three-second countdown, the bot solves the board, prints each selected word, and drags across its saved tile path. Longer words are attempted first. The runner stops playback after approximately 70 seconds.
+After a three-second countdown, the bot solves the board, prints each selected word, and drags across its saved tile path in the selected order. Each word is attempted once, regardless of how many paths form it. Press **Q** to stop during the countdown, solving, or playback, even with the game window focused. The runner also stops playback after approximately 70 seconds.
 
 ## Optional screenshot and local vision workflow
 

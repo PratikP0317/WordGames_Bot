@@ -1,5 +1,7 @@
 import json
+import random
 from pathlib import Path
+from threading import Event
 
 from ollama import chat
 
@@ -67,19 +69,27 @@ class WordHuntBot:
     def __init__(self, board: list[list[str]]):
         self.trie = DictionaryTrie(str(DEFAULT_DICTIONARY_PATH))
         self.found_words: list[tuple[str, list[tuple[int, int]]]] = []
+        self._found_word_names: set[str] = set()
         self.board_size = 4
         self.board = board
 
-    def solve(self) -> None:
+    def solve(self, stop_event: Event | None = None) -> None:
+        self.found_words.clear()
+        self._found_word_names.clear()
         # Board is 4x4 2d char array
         for i in range(self.board_size):
             for j in range(self.board_size):
+                if stop_event is not None and stop_event.is_set():
+                    return
                 visited = []
-                self.dfs(i, j, "", visited)
+                self.dfs(i, j, "", visited, stop_event)
 
     def dfs(
-        self, x: int, y: int, current_word: str, visited: list[tuple[int, int]]
+        self, x: int, y: int, current_word: str, visited: list[tuple[int, int]],
+        stop_event: Event | None = None,
     ) -> None:
+        if stop_event is not None and stop_event.is_set():
+            return
         directions = [
             (-1, -1),
             (-1, 0),
@@ -98,13 +108,14 @@ class WordHuntBot:
             visited.remove((x, y))
             return
 
-        if self.trie.is_word(current_word):
+        if current_word not in self._found_word_names and self.trie.is_word(current_word):
+            self._found_word_names.add(current_word)
             self.found_words.append((current_word, visited.copy()))
 
         for dx, dy in directions:
             new_x, new_y = x + dx, y + dy
             if self.is_valid(new_x, new_y, visited):
-                self.dfs(new_x, new_y, current_word, visited)
+                self.dfs(new_x, new_y, current_word, visited, stop_event)
 
         visited.remove((x, y))
 
@@ -116,13 +127,21 @@ class WordHuntBot:
         )
 
     def get_found_words(
-        self, sorted_max_len=True
+        self, sorted_max_len=True, *, order: str | None = None,
     ) -> list[tuple[str, list[tuple[int, int]]]]:
         words = self.found_words.copy()
-        if sorted_max_len:
+        if order is None:
+            order = "longest" if sorted_max_len else "discovery"
+        if order == "longest":
             return sorted(words, key=lambda item: (-len(item[0]), item[0]))
-        else:
+        if order == "shortest":
+            return sorted(words, key=lambda item: (len(item[0]), item[0]))
+        if order == "random":
+            random.shuffle(words)
             return words
+        if order == "discovery":
+            return words
+        raise ValueError(f"Unknown word order: {order}")
 
 
 if __name__ == "__main__":

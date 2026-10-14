@@ -89,6 +89,10 @@ uv run main.py
 
 Choose **Calibrate board** on your first run, then **Run bot**. Calibration only needs the centers of the top-left and bottom-right cells; the remaining cell centers are calculated automatically for an evenly spaced grid. The menu returns after each action. You can also open it with `uv run python -m wordgames_bot`.
 
+After entering the board, press **Q** to stop the bot, even while the game window is focused. This works during the countdown, solving, and mouse playback; an active drag is released before returning to the menu.
+
+Each run prompts for **Slow, Normal, or Fast** playback and **Highest first (longest words), Lowest first (shortest words), or Random** word order. Press Enter at both prompts to use normal speed and longest words first. Each word is played only once, even if it can be formed along multiple tile paths.
+
 Calibration is machine- and window-position-specific. On macOS, the terminal or IDE running the bot also needs Accessibility permission for mouse control; screenshot capture additionally needs Screen Recording permission.
 
 See [SETUP.md](SETUP.md) for installation, calibration, input format, optional screenshot extraction, and troubleshooting.
