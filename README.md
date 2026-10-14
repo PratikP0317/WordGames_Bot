@@ -109,6 +109,3 @@ See [SETUP.md](SETUP.md) for installation, calibration, input format, optional s
 - Calibration data is tied to the current screen layout and must be regenerated when the board moves or resizes.
 - Screenshot-to-grid extraction exists as an optional local-model experiment and is not enabled in the default runner.
 
-## Responsible use
-
-This project is intended as an educational exploration of tries, graph search, vision-language models, and desktop automation. Use automation only where it is permitted by the software or service you are interacting with.
