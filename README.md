@@ -108,4 +108,3 @@ See [SETUP.md](SETUP.md) for installation, calibration, input format, optional s
 - Playback stops after roughly 70 seconds to avoid running beyond a game round.
 - Calibration data is tied to the current screen layout and must be regenerated when the board moves or resizes.
 - Screenshot-to-grid extraction exists as an optional local-model experiment and is not enabled in the default runner.
-
