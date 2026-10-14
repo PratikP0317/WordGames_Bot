@@ -2,7 +2,7 @@
 
 # Word Hunt Bot
 
-### A computer-vision-ready solver that finds and plays words on a 4×4 board
+### Losing at Word Hunt? Apparently my answer was to write a bot.
 
 [![Python 3.13+](https://img.shields.io/badge/Python-3.13%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![Package manager: uv](https://img.shields.io/badge/package%20manager-uv-6E56CF)](https://docs.astral.sh/uv/)
@@ -16,11 +16,15 @@
 
 ## Overview
 
-Word Hunt Bot automates the search-and-swipe loop of a 4×4 Word Hunt-style game. Give it the 16 board letters and it will:
+I made this because I kept losing to my friend at Word Hunt on GamePigeon. After enough losses, I decided to make a bot. A perfectly reasonable response to a word game.
+
+Along the way, it turned into a fun project for learning about tries, graph search, and mouse automation. The motivation was personal. The data structures are educational.
+
+Give Word Hunt Bot the 16 board letters and it will:
 
 1. search every valid adjacent-letter path;
 2. prune impossible paths with a prefix trie;
-3. rank the results with longer words first; and
+3. order the results longest first, shortest first, or randomly; and
 4. trace each word across calibrated screen coordinates.
 
 The project combines a classic graph-search problem with desktop automation. It also includes an experimental local vision path that can convert a board screenshot into a letter grid with a Qwen3-VL model served by Ollama. The current `main.py` flow uses manual letter entry by default.
@@ -31,7 +35,7 @@ The project combines a classic graph-search problem with desktop automation. It 
 | --- | --- |
 | Board search | Depth-first search explores all eight neighboring tiles without reusing a tile in one word. |
 | Fast validation | A custom trie rejects branches as soon as their letter sequence is no longer a valid prefix. |
-| Word prioritization | Results are sorted by descending word length, then alphabetically. |
+| Word prioritization | Choose longest first, shortest first, or random order; each word is played once. |
 | Screen automation | Calibrated cell coordinates are translated into click-and-drag mouse paths. |
 | Board capture | The calibrated board region can be saved as an image for processing. |
 | Local vision experiment | Ollama and Qwen3-VL can parse a screenshot into a 4×4 JSON letter grid. |
@@ -45,7 +49,7 @@ flowchart LR
     D[ENABLE word list] --> E[Prefix trie]
     E --> C
     C --> F[Valid words + tile paths]
-    F --> G[Longest words first]
+    F --> G[Choose word order]
     H[Screen calibration] --> I[Mouse coordinates]
     G --> J[Automated swipe playback]
     I --> J
@@ -80,7 +84,7 @@ WordGames_Bot/
 
 ## Getting started
 
-The shortest path is:
+Ready to take a word game a little too seriously? Start here:
 
 ```bash
 uv sync
